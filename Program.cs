@@ -26,20 +26,17 @@ namespace ResizeTo3MB
 				lst.AddRange(Directory.GetFiles("./", "*.bmp", SearchOption.TopDirectoryOnly));
 			}
 
-			foreach (string s in lst)
-				ResizeImage(s);
-
-// 			Parallel.ForEach<string>(
-// 				lst,
-// 				(s) =>
-// 				{
-// 					try
-// 					{
-// 						ResizeImage(s);
-// 					}
-// 					catch
-// 					{ }
-// 				});
+ 			Parallel.ForEach<string>(
+ 				lst,
+ 				(s) =>
+ 				{
+ 					try
+ 					{
+ 						ResizeImage(s);
+ 					}
+ 					catch
+ 					{ }
+ 				});
 		}
 
 		private const int MaxSize = 2883584;	// 약 2.75 MB
