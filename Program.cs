@@ -6,6 +6,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace ResizeTo3MB
 {
@@ -26,107 +27,121 @@ namespace ResizeTo3MB
 				lst.AddRange(Directory.GetFiles("./", "*.bmp", SearchOption.TopDirectoryOnly));
 			}
 
- 			Parallel.ForEach<string>(
- 				lst,
- 				(s) =>
- 				{
- 					try
- 					{
- 						ResizeImage(s);
- 					}
- 					catch
- 					{ }
- 				});
+			long	i = 0;
+			object	sync = new object();
+
+			Parallel.ForEach<string>(
+				lst,
+				(s) =>
+				{
+					try
+					{
+						Data data = ResizeImage(s);
+						Interlocked.Increment(ref i);
+
+						lock (sync)
+						{
+							if (data.Resized)
+								Console.ForegroundColor = ConsoleColor.Yellow;
+							else
+								Console.ForegroundColor = ConsoleColor.White;
+
+							Console.WriteLine(
+								"[{0} / {1}] {2}x{3} {4} => {5}x{6} {7} : {8}",
+								i,
+								lst.Count,
+								data.SizeO.Width, data.SizeO.Height,
+								ToSize(data.CapO),
+								data.SizeR.Width, data.SizeR.Height,
+								ToSize(data.CapR),
+								Path.GetFileName(s));
+						}
+					}
+					catch
+					{ }
+				});
+
+			Console.WriteLine();
+			Console.WriteLine("DONE.");
+			Console.ReadKey();
 		}
 
 		private const int MaxSize = 2883584;	// 약 2.75 MB
 
 		class Data
 		{
+			public bool		Resized;
+
 			public Image	Image;
 			public byte[]	Bytes;
 
-			public Size		SOri;
-			public Size		SRes;
+			public Size		SizeO;
+			public Size		SizeR;
 
-			public long		COri;
-			public long		CRes;
-
-			public string	Path;
+			public long		CapO;
+			public long		CapR;
 		}
 
-		private static void ResizeImage(string path)
+		private static Data ResizeImage(string path)
 		{
-			if (new FileInfo(path).Length < MaxSize) return;
-
 			Data data = new Data();
 
-			data.Image	= Image.FromFile(path);
-			data.Path	= path;
 			data.Bytes	= File.ReadAllBytes(path);
-
-			data.SOri	= data.Image.Size;
-			data.COri	= data.Bytes.Length;
-
-			// not available GIF now.
-			ImageCodecInfo		codec;
-			EncoderParameters	param;
-
-			if (data.Image.RawFormat.Guid == ImageFormat.Jpeg.Guid || !IsImageTransparent(data.Image))
+			using (MemoryStream stream = new MemoryStream(data.Bytes))
+			using (data.Image = Image.FromStream(stream))
 			{
-				codec = ImageCodecInfo.GetImageDecoders().First(e => e.FormatID == ImageFormat.Jpeg.Guid);
-				param = new EncoderParameters(1);
+				data.SizeO	= data.Image.Size;
+				data.CapO	= data.Bytes.Length;
 
-				// PropertyTagJPEGQuality 를 찾는다. 없으면 100퍼
-				long quality = 100;
+				if (data.Bytes.Length < MaxSize)
+				{
+					data.SizeR = data.SizeO;
+					data.CapR = data.CapO;
+				}
+				else
+				{
+					data.Resized = true;
 
-				if (data.Image.PropertyIdList.Any(e => e == 0x5010))
-					quality = data.Image.PropertyItems.First(e => e.Id == 0x5010).Value[0];
+					// not available GIF now.
+					ImageCodecInfo		codec;
+					EncoderParameters	param;
 
-				param.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
+					if (data.Image.RawFormat.Guid == ImageFormat.Jpeg.Guid || !IsImageTransparent(data.Image))
+					{
+						codec = ImageCodecInfo.GetImageDecoders().First(e => e.FormatID == ImageFormat.Jpeg.Guid);
+						param = new EncoderParameters(1);
 
-				ResizeJpg(data, codec, param);
+						long quality = 90;
+						if (data.Image.PropertyIdList.Any(e => e == 0x5010)) quality = data.Image.PropertyItems.First(e => e.Id == 0x5010).Value[0];
+
+						param.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
+
+						ResizeJpg(data, codec, param);
+					}
+					else
+					{
+						codec = ImageCodecInfo.GetImageDecoders().First(e => e.FormatID == ImageFormat.Png.Guid);
+						param = new EncoderParameters(1);
+						param.Param[0] = new EncoderParameter(Encoder.ColorDepth, Bitmap.GetPixelFormatSize(data.Image.PixelFormat));
+
+						ResizePng(data, codec, param);
+					}
+
+					if (!Directory.Exists("Backup")) Directory.CreateDirectory("Backup");
+					File.Move(path, Path.Combine(Path.Combine(Path.GetDirectoryName(path), "Backup"), Path.GetFileName(path)));
+
+				}
 			}
-			else
-			{
-				codec = ImageCodecInfo.GetImageDecoders().First(e => e.FormatID == ImageFormat.Png.Guid);
-				param = new EncoderParameters(1);
-				param.Param[0] = new EncoderParameter(Encoder.ColorDepth, Bitmap.GetPixelFormatSize(data.Image.PixelFormat));
 
-				ResizePng(data, codec, param);
-			}
+			if (data.Resized)
+				File.WriteAllBytes(path, data.Bytes);
 
-			data.Image.Dispose();
 
-			Console.WriteLine(
-				"{0}x{1} {2} => {3}x{4} {5} : {6}",
-				data.SOri.Width, data.SOri.Height,
-				ToSize(data.COri),
-				data.SRes.Width, data.SRes.Height,
-				ToSize(data.CRes),
-				Path.GetFileName(path));
-
-			if (!Directory.Exists("Backup")) Directory.CreateDirectory("Backup");
-
-			File.Move(path, Path.Combine(Path.Combine(Path.GetDirectoryName(path), "Backup"), Path.GetFileName(path)));
-
-			File.WriteAllBytes(path, data.Bytes);
+			return data;
 		}
 
-		// 픽셀 수 계산
-		//						JPG		PNG
-		// Compression ratio	(va)	50%
-		// Bytes per pixel		2.1		(va)
 		private static void ResizeJpg(Data data, ImageCodecInfo codec, EncoderParameters param)
 		{
-			// 품빌 변경 : 80
-			// 품질 변경 : 60
-			// 사이즈 변경
-			// 0.9 배씩 줄이면서 변경
-			int origQuaility = param.Param[0].NumberOfValues;
-			int quaility = param.Param[0].NumberOfValues;
-			quaility = quaility - (quaility % 10);
-
 			int w = data.Image.Width;
 			int h = data.Image.Height;
 
@@ -186,8 +201,8 @@ namespace ResizeTo3MB
 					imageNew.Save(memStream, codec, param);
 					data.Bytes = memStream.ToArray();
 
-					data.SRes = imageNew.Size;
-					data.CRes = data.Bytes.Length;
+					data.SizeR = imageNew.Size;
+					data.CapR = data.Bytes.Length;
 				}
 			}
 		}
@@ -214,8 +229,6 @@ namespace ResizeTo3MB
 				{
 					byte* pointerToImageData = (byte*)binaryImage.Scan0;
 					int numberOfPixels = bitmap.Width * bitmap.Height;
-
-					isTransparent = false;
 
 					// 8 bytes = 64 bits, since our image is 64bppArgb.
 					for (int i = 0; i < numberOfPixels * 8; i += 8)
