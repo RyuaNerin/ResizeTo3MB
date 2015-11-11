@@ -14,10 +14,34 @@ namespace ResizeTo3MB
 	{
 		static void Main(string[] args)
 		{
+			long i = 0;
+
 			List<string> lst = new List<string>();
 
 			if (args.Length > 0)
 			{
+				for (i = 0; i < args.Length; ++i)
+				{
+					if (Directory.Exists(args[i]))
+					{
+						lst.AddRange(Directory.GetFiles("./", "*.jpg", SearchOption.AllDirectories));
+						lst.AddRange(Directory.GetFiles("./", "*.png", SearchOption.AllDirectories));
+						lst.AddRange(Directory.GetFiles("./", "*.bmp", SearchOption.AllDirectories));
+					}
+					else
+					{
+						switch (Path.GetExtension(args[i]))
+						{
+							case ".jpg":
+							case ".jpeg":
+							case ".png":
+							case ".bmp":
+								lst.Add(args[i]);
+								break;
+						}
+					}
+				}
+
 				lst.AddRange(args.Where<string>(s => s.EndsWith(".jpg") | s.EndsWith(".png") | s.EndsWith(".bmp")));
 			}
 			else
@@ -27,7 +51,6 @@ namespace ResizeTo3MB
 				lst.AddRange(Directory.GetFiles("./", "*.bmp", SearchOption.TopDirectoryOnly));
 			}
 
-			long	i = 0;
 			object	sync = new object();
 
 			Parallel.ForEach<string>(
@@ -47,12 +70,9 @@ namespace ResizeTo3MB
 								Console.ForegroundColor = ConsoleColor.White;
 
 							Console.WriteLine(
-								"[{0} / {1}] {2}x{3} {4} => {5}x{6} {7} : {8}",
+								"[{0} / {1}] {2} : {3}",
 								i,
 								lst.Count,
-								data.SizeO.Width, data.SizeO.Height,
-								ToSize(data.CapO),
-								data.SizeR.Width, data.SizeR.Height,
 								ToSize(data.CapR),
 								Path.GetFileName(s));
 						}
