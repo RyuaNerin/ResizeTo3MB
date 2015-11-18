@@ -22,9 +22,10 @@ namespace ResizeTo3MB
 			{
 				for (i = 0; i < args.Length; ++i)
 				{
-					if (Directory.Exists(args[i]))
+					if ((File.GetAttributes(args[i]) & FileAttributes.Directory) == FileAttributes.Directory)
 					{
 						lst.AddRange(Directory.GetFiles("./", "*.jpg", SearchOption.AllDirectories));
+						lst.AddRange(Directory.GetFiles("./", "*.jpeg", SearchOption.AllDirectories));
 						lst.AddRange(Directory.GetFiles("./", "*.png", SearchOption.AllDirectories));
 						lst.AddRange(Directory.GetFiles("./", "*.bmp", SearchOption.AllDirectories));
 					}
@@ -41,18 +42,18 @@ namespace ResizeTo3MB
 						}
 					}
 				}
-
-				lst.AddRange(args.Where<string>(s => s.EndsWith(".jpg") | s.EndsWith(".png") | s.EndsWith(".bmp")));
 			}
 			else
 			{
-				lst.AddRange(Directory.GetFiles("./", "*.jpg", SearchOption.TopDirectoryOnly));
-				lst.AddRange(Directory.GetFiles("./", "*.png", SearchOption.TopDirectoryOnly));
-				lst.AddRange(Directory.GetFiles("./", "*.bmp", SearchOption.TopDirectoryOnly));
+				lst.AddRange(Directory.GetFiles("./", "*.jpg", SearchOption.AllDirectories));
+				lst.AddRange(Directory.GetFiles("./", "*.jpeg", SearchOption.AllDirectories));
+				lst.AddRange(Directory.GetFiles("./", "*.png", SearchOption.AllDirectories));
+				lst.AddRange(Directory.GetFiles("./", "*.bmp", SearchOption.AllDirectories));
 			}
 
 			object	sync = new object();
 
+			i = 0;
 			Parallel.ForEach<string>(
 				lst,
 				(s) =>
@@ -86,7 +87,7 @@ namespace ResizeTo3MB
 			Console.ReadKey();
 		}
 
-		private const int MaxSize = 2883584;	// 약 2.75 MB
+		private const int MaxSize = 3145728; //2883584;	// 약 2.75 MB
 
 		class Data
 		{
