@@ -87,7 +87,7 @@ namespace ResizeTo3MB
 			Console.ReadKey();
 		}
 
-		private const int MaxSize = 3145728; //2883584;	// 약 2.75 MB
+		private const int MaxSize = 5 * 1024 * 1024; // 5 MiB
 
 		class Data
 		{
