@@ -8,7 +8,7 @@
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>ResizeTo3MB</RootNamespace>
-    <AssemblyName>ResizeTo3MB</AssemblyName>
+    <AssemblyName>ResizeTo5MB</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AssemblyVersion>1.0.0.6</AssemblyVersion>
